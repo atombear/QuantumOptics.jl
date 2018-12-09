@@ -3,7 +3,7 @@ module states
 export StateVector, Bra, Ket, length, basis, dagger, tensor,
     norm, normalize, normalize!, permutesystems, basisstate
 
-import Base: ==, +, -, *, /, length, copy
+import Base: ==, +, -, *, /, length, copy, Broadcast
 import LinearAlgebra: norm, normalize, normalize!
 import ..bases: basis, tensor, permutesystems, check_multiplicable, samebases
 
@@ -185,5 +185,76 @@ function check_multiplicable(a::Bra, b::Ket)
 end
 
 samebases(a::T, b::T) where {T<:StateVector} = samebases(a.basis, b.basis)::Bool
+
+# Array-like functions
+Base.size(x::StateVector) = size(x.data)
+Base.axes(x::StateVector) = axes(x.data)
+Base.ndims(x::StateVector) = 1
+Base.ndims(::Type{<:StateVector}) = 1
+# Indexing
+Base.getindex(x::StateVector, i::Int) = getindex(x.data, i)
+Base.getindex(x::StateVector, I::Vararg{Int,N}) where N = getindex(x.data, I...)
+Base.getindex(x::StateVector, I::CartesianIndex) = getindex(x.data, I)
+Base.setindex!(x::StateVector, v, i::Int) = setindex!(x.data, v, i)
+Base.setindex!(x::StateVector, v, I::Vararg{Int,N}) where N = setindex!(x.data, v, I...)
+Base.setindex!(x::StateVector, v, I::CartesianIndex) = setindex!(x.data, v, I)
+# Broadcasting
+Base.broadcastable(x::StateVector) = x
+
+# Custom broadcasting style
+abstract type StateVectorStyle{B<:Basis} <: Broadcast.BroadcastStyle end
+struct KetStyle{B<:Basis} <: StateVectorStyle{B} end
+struct BraStyle{B<:Basis} <: StateVectorStyle{B} end
+
+# Style precedence rules
+Broadcast.BroadcastStyle(::Type{<:Ket{B}}) where {B<:Basis} = KetStyle{B}()
+Broadcast.BroadcastStyle(::Type{<:Bra{B}}) where {B<:Basis} = BraStyle{B}()
+Broadcast.BroadcastStyle(::T, ::Broadcast.DefaultArrayStyle{0}) where T<:StateVectorStyle = T() # Broadcasting with numbers
+Broadcast.BroadcastStyle(::KetStyle{B1}, ::KetStyle{B2}) where {B1<:Basis,B2<:Basis} = throw(bases.IncompatibleBases())
+Broadcast.BroadcastStyle(::BraStyle{B1}, ::BraStyle{B2}) where {B1<:Basis,B2<:Basis} = throw(bases.IncompatibleBases())
+
+function Base.similar(bc::Broadcast.Broadcasted{Style}, ::Type{ElType}) where {B<:Basis,Style<:KetStyle{B},ElType<:ComplexF64}
+    b = find_basis(bc)
+    return Ket{B}(b, similar(Vector{ElType}, axes(bc)))
+end
+function Base.similar(bc::Broadcast.Broadcasted{Style}, ::Type{ElType}) where {B<:Basis,Style<:BraStyle{B},ElType<:ComplexF64}
+    b = find_basis(bc)
+    return Bra{B}(b, similar(Vector{ElType}, axes(bc)))
+end
+find_basis(bc::Broadcast.Broadcasted) = find_basis(bc.args)
+find_basis(args::Tuple) = find_basis(find_basis(args[1]), Base.tail(args))
+find_basis(x) = x
+find_basis(a::StateVector, rest) = a.basis
+find_basis(::Any, rest) = find_basis(rest)
+
+# In-place broadcasting for Kets
+function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:KetStyle{B}}
+    copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
+    dest
+end
+function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:KetStyle{B},Axes,Args<:Tuple{<:Ket{B}}}
+    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
+    A = bc.args[1]
+    axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
+    return copyto!(dest, A)
+end
+Base.copyto!(dest::Ket{B1}, bc::Broadcast.Broadcasted{Style}) where {B1<:Basis,B2<:Basis,Style<:KetStyle{B2}} =
+    throw(bases.IncompatibleBases())
+
+# In-place broadcasting for Bras
+function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:BraStyle{B}}
+    copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
+    dest
+end
+function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:BraStyle{B},Axes,Args<:Tuple{<:Bra{B}}}
+    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
+    A = bc.args[1]
+    axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
+    return copyto!(dest, A)
+end
+Base.copyto!(dest::Bra{B1}, bc::Broadcast.Broadcasted{Style}) where {B1<:Basis,B2<:Basis,Style<:BraStyle{B2}} =
+    throw(bases.IncompatibleBases())
+
+Base.copyto!(A::T,B::T) where T<:StateVector = (copyto!(A.data,B.data); A)
 
 end # module

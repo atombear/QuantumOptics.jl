@@ -348,6 +348,7 @@ bnlevel = NLevelBasis(2)
 
 # Test broadcasting
 @test_throws DimensionMismatch op1 .+ op2
+@test op1 .+ op1 == op1 + op1
 op1 .= DenseOperator(op1)
 @test isa(op1, SparseOperator)
 @test isa(op1 .+ DenseOperator(op1), DenseOperator)

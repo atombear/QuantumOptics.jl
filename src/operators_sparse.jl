@@ -158,8 +158,13 @@ Broadcast.BroadcastStyle(::DenseOperatorStyle{B1,B2}, ::SparseOperatorStyle{B3,B
 Broadcast.BroadcastStyle(::SparseOperatorStyle{B1,B2}, ::SparseOperatorStyle{B3,B4}) where {B1<:Basis,B2<:Basis,B3<:Basis,B4<:Basis} = throw(bases.IncompatibleBases())
 
 function Base.similar(bc::Broadcast.Broadcasted{Style}, ::Type{ElType}) where {BL<:Basis,BR<:Basis,Style<:SparseOperatorStyle{BL,BR},ElType<:ComplexF64}
-    bl,br = states.find_basis(bc)
-    return SparseOperator{BL,BR}(bl,br,similar(SparseMatrixCSC{ElType,Int}, axes(bc)))
+    A = find_op(bc)
+    return SparseOperator{BL,BR}(A.basis_l,A.basis_r,similar(A.data))
 end
+find_op(bc::Broadcast.Broadcasted) = find_op(bc.args)
+find_op(args::Tuple) = find_op(find_op(args[1]), Base.tail(args))
+find_op(x) = x
+find_op(a::SparseOperator, rest) = a
+find_op(::Any, rest) = find_op(rest)
 
 end # module

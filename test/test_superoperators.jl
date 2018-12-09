@@ -180,4 +180,22 @@ tout, ρt = timeevolution.master([0.,1.], ρ₀, H, J; reltol=1e-7)
 rates = diagm(0 => [1.0, 1.0])
 @test liouvillian(H, J; rates=rates) == L
 
+# Test broadcasting
+@test L .+ L == L + L
+Ldense = dense(L)
+@test isa(L .+ Ldense, DenseSuperOperator)
+L_ = copy(L)
+L .*= 2.0
+@test L == 2*L_
+L .+= Ldense
+@test L == 3*L_
+Ldense_ = dense(L_)
+Ldense .*= 2
+@test Ldense == 2*Ldense_
+Ldense .+= Ldense
+@test Ldense == 4*Ldense_
+Ldense .+= L
+@test isa(Ldense, DenseSuperOperator)
+@test isapprox(Ldense.data, 7*Ldense_.data)
+
 end # testset

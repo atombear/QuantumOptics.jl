@@ -3,8 +3,9 @@ module superoperators
 export SuperOperator, DenseSuperOperator, SparseSuperOperator,
         spre, spost, liouvillian, exp
 
-import Base: ==, *, /, +, -
+import Base: ==, *, /, +, -, Broadcast
 import ..bases
+import ..states: find_basis
 import SparseArrays: sparse
 
 using ..bases, ..operators, ..operators_dense, ..operators_sparse
@@ -44,6 +45,7 @@ mutable struct DenseSuperOperator{B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},
         new(basis_l, basis_r, data)
     end
 end
+DenseSuperOperator{BL,BR}(basis_l::BL, basis_r::BR, data::T) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},T<:Matrix{ComplexF64}} = DenseSuperOperator{BL,BR,T}(basis_l, basis_r, data)
 DenseSuperOperator(basis_l::BL, basis_r::BR, data::T) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},T<:Matrix{ComplexF64}} = DenseSuperOperator{BL,BR,T}(basis_l, basis_r, data)
 
 function DenseSuperOperator(basis_l::Tuple{Basis, Basis}, basis_r::Tuple{Basis, Basis})
@@ -71,6 +73,7 @@ mutable struct SparseSuperOperator{B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis}
         new(basis_l, basis_r, data)
     end
 end
+SparseSuperOperator{B1,B2}(basis_l::B1, basis_r::B2, data::T) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},T<:SparseMatrixCSC{ComplexF64,Int}} = SparseSuperOperator{B1,B2,T}(basis_l, basis_r, data)
 SparseSuperOperator(basis_l::B1, basis_r::B2, data::T) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},T<:SparseMatrixCSC{ComplexF64,Int}} = SparseSuperOperator{B1,B2,T}(basis_l, basis_r, data)
 
 function SparseSuperOperator(basis_l::Tuple{Basis, Basis}, basis_r::Tuple{Basis, Basis})
@@ -221,5 +224,69 @@ end
 Operator exponential which can for example used to calculate time evolutions.
 """
 Base.exp(op::DenseSuperOperator) = DenseSuperOperator(op.basis_l, op.basis_r, exp(op.data))
+
+
+# Array-like functions
+Base.size(A::SuperOperator) = size(A.data)
+Base.axes(A::SuperOperator) = axes(A.data)
+Base.ndims(A::SuperOperator) = 2
+Base.ndims(::Type{<:SuperOperator}) = 2
+# Indexing
+Base.getindex(A::SuperOperator, i::Int) = getindex(A.data, i)
+Base.getindex(A::SuperOperator, I::Vararg{Int,N}) where N = getindex(A.data, I...)
+Base.getindex(A::SuperOperator, I::CartesianIndex) = getindex(A.data, I)
+Base.setindex!(A::SuperOperator, v, i::Int) = setindex!(A.data, v, i)
+Base.setindex!(A::SuperOperator, v, I::Vararg{Int,N}) where N = setindex!(A.data, v, I...)
+Base.setindex!(A::SuperOperator, v, I::CartesianIndex) = setindex!(A.data, v, I)
+# Broadcasting
+Base.broadcastable(A::SuperOperator) = A
+
+# Custom broadcasting styles
+abstract type SuperOperatorStyle{BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} <: Broadcast.BroadcastStyle end
+struct DenseSuperOperatorStyle{BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} <: SuperOperatorStyle{BL,BR} end
+struct SparseSuperOperatorStyle{BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} <: SuperOperatorStyle{BL,BR} end
+
+# Style precedence rules
+Broadcast.BroadcastStyle(::Type{<:DenseSuperOperator{BL,BR}}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} = DenseSuperOperatorStyle{BL,BR}()
+Broadcast.BroadcastStyle(::Type{<:SparseSuperOperator{BL,BR}}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} = SparseSuperOperatorStyle{BL,BR}()
+Broadcast.BroadcastStyle(::T, ::Broadcast.DefaultArrayStyle{0}) where T<:SuperOperatorStyle = T() # Broadcasting with numbers
+Broadcast.BroadcastStyle(::DenseSuperOperatorStyle{B1,B2}, ::SparseSuperOperatorStyle{B1,B2}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis}} = DenseSuperOperatorStyle{B1,B2}()
+Broadcast.BroadcastStyle(::DenseSuperOperatorStyle{B1,B2}, ::DenseSuperOperatorStyle{B3,B4}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},B3<:Tuple{Basis,Basis},B4<:Tuple{Basis,Basis}} = throw(bases.IncompatibleBases())
+Broadcast.BroadcastStyle(::SparseSuperOperatorStyle{B1,B2}, ::SparseSuperOperatorStyle{B3,B4}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},B3<:Tuple{Basis,Basis},B4<:Tuple{Basis,Basis}} = throw(bases.IncompatibleBases())
+Broadcast.BroadcastStyle(::DenseSuperOperatorStyle{B1,B2}, ::SparseSuperOperatorStyle{B3,B4}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},B3<:Tuple{Basis,Basis},B4<:Tuple{Basis,Basis}} = throw(bases.IncompatibleBases())
+
+function Base.similar(bc::Broadcast.Broadcasted{Style}, ::Type{ElType}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:DenseSuperOperatorStyle{BL,BR},ElType<:ComplexF64}
+    bl,br = find_basis(bc)
+    return DenseSuperOperator{BL,BR}(bl,br,similar(Matrix{ElType}, axes(bc)))
+end
+function Base.similar(bc::Broadcast.Broadcasted{Style}, ::Type{ElType}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SparseSuperOperatorStyle{BL,BR},ElType<:ComplexF64}
+    A = find_op(bc)
+    return SparseSuperOperator{BL,BR}(A.basis_l,A.basis_r,similar(A.data))
+end
+find_basis(a::SuperOperator, rest) = (a.basis_l, a.basis_r)
+find_op(bc::Broadcast.Broadcasted) = find_op(bc.args)
+find_op(args::Tuple) = find_op(find_op(args[1]), Base.tail(args))
+find_op(x) = x
+find_op(a::SparseSuperOperator, rest) = a
+find_op(::Any, rest) = find_op(rest)
+
+# In-place broadcasting
+function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR}}
+    copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
+    dest
+end
+function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR},Axes,Args<:Tuple{<:SuperOperator{BL,BR}}}
+    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
+    A = bc.args[1]
+    axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
+    return copyto!(dest, A)
+end
+Base.copyto!(A::SuperOperator{BL,BR},B::SuperOperator{BL,BR}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} = (copyto!(A.data,B.data); A)
+function Base.copyto!(dest::SuperOperator{B1,B2}, bc::Broadcast.Broadcasted{Style}) where {
+        B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},B3<:Tuple{Basis,Basis},
+        B4<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{B3,B4}
+        }
+    throw(bases.IncompatibleBases())
+end
 
 end # module

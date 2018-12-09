@@ -346,4 +346,16 @@ bnlevel = NLevelBasis(2)
 @test ishermitian(SparseOperator(bspin, bspin, sparse([1.0 im; -im 2.0]))) == true
 @test ishermitian(SparseOperator(bspin, bnlevel, sparse([1.0 im; -im 2.0]))) == false
 
+# Test broadcasting
+@test_throws DimensionMismatch op1 .+ op2
+op1 .= DenseOperator(op1)
+@test isa(op1, SparseOperator)
+@test isa(op1 .+ DenseOperator(op1), DenseOperator)
+op1_ = copy(op1)
+op1 .*= 3.33
+@test op1 == 3.33*op1_
+op3 = sprandop(FockBasis(1),FockBasis(2))
+@test_throws bases.IncompatibleBases op1 .+ op3
+@test_throws bases.IncompatibleBases op1 .= op3
+
 end # testset

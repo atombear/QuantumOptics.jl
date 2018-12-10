@@ -228,7 +228,7 @@ Base.exp(op::DenseSuperOperator) = DenseSuperOperator(op.basis_l, op.basis_r, ex
 
 # Array-like functions
 Base.size(A::SuperOperator) = size(A.data)
-Base.axes(A::SuperOperator) = axes(A.data)
+@inline Base.axes(A::SuperOperator) = axes(A.data)
 Base.ndims(A::SuperOperator) = 2
 Base.ndims(::Type{<:SuperOperator}) = 2
 # Indexing
@@ -271,17 +271,17 @@ find_op(a::SparseSuperOperator, rest) = a
 find_op(::Any, rest) = find_op(rest)
 
 # In-place broadcasting
-function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR}}
+@inline function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR}}
     copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
     dest
 end
-function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR},Axes,Args<:Tuple{<:SuperOperator{BL,BR}}}
+@inline function Base.copyto!(dest::SuperOperator{BL,BR}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{BL,BR},Axes,Args<:Tuple{<:SuperOperator{BL,BR}}}
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     A = bc.args[1]
     axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
     return copyto!(dest, A)
 end
-Base.copyto!(A::SuperOperator{BL,BR},B::SuperOperator{BL,BR}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} = (copyto!(A.data,B.data); A)
+@inline Base.copyto!(A::SuperOperator{BL,BR},B::SuperOperator{BL,BR}) where {BL<:Tuple{Basis,Basis},BR<:Tuple{Basis,Basis}} = (copyto!(A.data,B.data); A)
 function Base.copyto!(dest::SuperOperator{B1,B2}, bc::Broadcast.Broadcasted{Style}) where {
         B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis},B3<:Tuple{Basis,Basis},
         B4<:Tuple{Basis,Basis},Style<:SuperOperatorStyle{B3,B4}

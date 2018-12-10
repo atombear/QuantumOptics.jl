@@ -188,7 +188,7 @@ samebases(a::T, b::T) where {T<:StateVector} = samebases(a.basis, b.basis)::Bool
 
 # Array-like functions
 Base.size(x::StateVector) = size(x.data)
-Base.axes(x::StateVector) = axes(x.data)
+@inline Base.axes(x::StateVector) = axes(x.data)
 Base.ndims(x::StateVector) = 1
 Base.ndims(::Type{<:StateVector}) = 1
 # Indexing
@@ -228,11 +228,11 @@ find_basis(a::StateVector, rest) = a.basis
 find_basis(::Any, rest) = find_basis(rest)
 
 # In-place broadcasting for Kets
-function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:KetStyle{B}}
+@inline function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:KetStyle{B}}
     copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
     dest
 end
-function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:KetStyle{B},Axes,Args<:Tuple{<:Ket{B}}}
+@inline function Base.copyto!(dest::Ket{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:KetStyle{B},Axes,Args<:Tuple{<:Ket{B}}}
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     A = bc.args[1]
     axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
@@ -242,11 +242,11 @@ Base.copyto!(dest::Ket{B1}, bc::Broadcast.Broadcasted{Style}) where {B1<:Basis,B
     throw(bases.IncompatibleBases())
 
 # In-place broadcasting for Bras
-function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:BraStyle{B}}
+@inline function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style}) where {B<:Basis,Style<:BraStyle{B}}
     copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
     dest
 end
-function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:BraStyle{B},Axes,Args<:Tuple{<:Bra{B}}}
+@inline function Base.copyto!(dest::Bra{B}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {B<:Basis,Style<:BraStyle{B},Axes,Args<:Tuple{<:Bra{B}}}
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     A = bc.args[1]
     axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
@@ -255,6 +255,6 @@ end
 Base.copyto!(dest::Bra{B1}, bc::Broadcast.Broadcasted{Style}) where {B1<:Basis,B2<:Basis,Style<:BraStyle{B2}} =
     throw(bases.IncompatibleBases())
 
-Base.copyto!(A::T,B::T) where T<:StateVector = (copyto!(A.data,B.data); A)
+@inline Base.copyto!(A::T,B::T) where T<:StateVector = (copyto!(A.data,B.data); A)
 
 end # module

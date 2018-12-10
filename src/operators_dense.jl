@@ -302,7 +302,7 @@ end
 
 # Array-like functions
 Base.size(A::DataOperator) = size(A.data)
-Base.axes(A::DataOperator) = axes(A.data)
+@inline Base.axes(A::DataOperator) = axes(A.data)
 Base.ndims(A::DataOperator) = 2
 Base.ndims(::Type{<:DataOperator}) = 2
 # Indexing
@@ -331,17 +331,17 @@ end
 states.find_basis(a::DataOperator, rest) = (a.basis_l, a.basis_r)
 
 # In-place broadcasting
-function Base.copyto!(dest::DataOperator{BL,BR}, bc::Broadcast.Broadcasted{Style}) where {BL<:Basis,BR<:Basis,Style<:DataOperatorStyle{BL,BR}}
+@inline function Base.copyto!(dest::DataOperator{BL,BR}, bc::Broadcast.Broadcasted{Style}) where {BL<:Basis,BR<:Basis,Style<:DataOperatorStyle{BL,BR}}
     copyto!(dest.data, convert(Broadcast.Broadcasted{Nothing}, bc))
     dest
 end
-function Base.copyto!(dest::DataOperator{BL,BR}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {BL<:Basis,BR<:Basis,Style<:DataOperatorStyle{BL,BR},Axes,Args<:Tuple{<:DataOperator{BL,BR}}}
+@inline function Base.copyto!(dest::DataOperator{BL,BR}, bc::Broadcast.Broadcasted{Style,Axes,typeof(identity),Args}) where {BL<:Basis,BR<:Basis,Style<:DataOperatorStyle{BL,BR},Axes,Args<:Tuple{<:DataOperator{BL,BR}}}
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     A = bc.args[1]
     axes(dest) == axes(bc) || Base.Broadcast.throwdm(axes(dest), axes(A))
     return copyto!(dest, A)
 end
-Base.copyto!(A::DataOperator{BL,BR},B::DataOperator{BL,BR}) where {BL<:Basis,BR<:Basis} = (copyto!(A.data,B.data); A)
+@inline Base.copyto!(A::DataOperator{BL,BR},B::DataOperator{BL,BR}) where {BL<:Basis,BR<:Basis} = (copyto!(A.data,B.data); A)
 Base.copyto!(dest::DataOperator{B1,B2}, bc::Broadcast.Broadcasted{Style}) where {B1<:Basis,B2<:Basis,B3<:Basis,B4<:Basis,Style<:DataOperatorStyle{B3,B4}} =
     throw(bases.IncompatibleBases())
 

@@ -1,7 +1,7 @@
 module superoperators
 
 export SuperOperator, DenseSuperOperator, SparseSuperOperator,
-        spre, spost, liouvillian, exp
+        spre, spost, liouvillian, exp, DenseVectorized
 
 import Base: ==, *, /, +, -
 import ..bases
@@ -11,6 +11,25 @@ import SparseArrays: sparse
 using ..bases, ..operators, ..operators_dense, ..operators_sparse
 using SparseArrays
 
+abstract type Vectorized{B<:Tuple{Basis,Basis}} end
+
+mutable struct DenseVectorized{B<:Tuple{Basis, Basis}, T<:Array{ComplexF64, 1}} <: Vectorized{B}
+    basis::B
+    data::T
+    function DenseVectorized(basis::Tuple{Basis, Basis}, data::Matrix{ComplexF64})
+        @assert basis[1] == basis[2]
+        return new{Tuple{Basis, Basis}, Array{ComplexF64, 1}}(basis, reshape(data, length(data)))
+    end
+end
+#
+# mutable struct SparseVectorized{B<:Tuple{Basis, Basis}, T<:SparseMatrixCSC{ComplexF64,Int}} <: Vectorized{B}
+#     basis::B
+#     data::T
+#     function SparseVectorized{B, T}(basis::B, data::T) where {B<:Tuple{Basis, Basis}, T<:SparseMatrixCSC{ComplexF64,Int}}
+#         @assert basis[1] == basis[2]
+#         return new(basis, reshape(data, length(data)))
+#     end
+# end
 
 """
 Base class for all super operator classes.
@@ -288,5 +307,7 @@ end
         }
     throw(bases.IncompatibleBases())
 end
+
+SuperOperator(unitary::AbstractOperator) = spre(unitary) * spost(unitary')
 
 end # module

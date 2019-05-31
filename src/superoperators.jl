@@ -105,6 +105,7 @@ SuperOperator(basis_l, basis_r, data::SparseMatrixCSC{ComplexF64, Int}) = Sparse
 SuperOperator(basis_l, basis_r, data::Matrix{ComplexF64}) = DenseSuperOperator(basis_l, basis_r, data)
 SuperOperator{B1,B2}(basis_l::B1, basis_r::B2, data::SparseMatrixCSC{ComplexF64, Int}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis}} = SparseSuperOperator(basis_l, basis_r, data)
 SuperOperator{B1,B2}(basis_l::B1, basis_r::B2, data::Matrix{ComplexF64}) where {B1<:Tuple{Basis,Basis},B2<:Tuple{Basis,Basis}} = DenseSuperOperator(basis_l, basis_r, data)
+SuperOperator(unitary::AbstractOperator) = spre(unitary) * spost(unitary')
 
 
 Base.copy(a::T) where {T<:SuperOperator} = T(a.basis_l, a.basis_r, copy(a.data))
@@ -307,7 +308,5 @@ end
         }
     throw(bases.IncompatibleBases())
 end
-
-SuperOperator(unitary::AbstractOperator) = spre(unitary) * spost(unitary')
 
 end # module

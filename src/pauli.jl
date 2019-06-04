@@ -5,8 +5,10 @@ export PauliBasis, PauliTransferMatrix
 import Base: ==
 
 using ..bases, ..spin, ..superoperators
-using ..operators: identityoperator
+using ..operators: identityoperator, AbstractOperator
+using ..operators_dense: DenseOperator
 using ..spin: sigmax, sigmay, sigmaz
+using SparseArrays
 
 """
     PauliBasis(N)
@@ -42,30 +44,27 @@ mutable struct DensePauliTransferMatrix{B1<:Tuple{PauliBasis, PauliBasis},
     end
 end
 
-function PauliTransferMatrix(sop::SuperOperator)
-    @assert sop.basis_l[1] == sop.basis_l[2]
-    @assert sop.basis_r[1] == sop.basis_r[2]
-
-    @assert typeof(sop.basis_l[1]) <: PauliBasis
-    @assert typeof(sop.basis_r[1]) <: PauliBasis
-
+function pauli_basis_vectors(num_qubits::Int64)
     pauli_funcs = (identityoperator, sigmax, sigmay, sigmaz)
-    pauli_basis_vectors = []
-    bases = sop.basis_l[1].bases
-    for paulis in Iterators.product((pauli_funcs for _ in 1:length(bases))...)
-        push!(pauli_basis_vectors, reduce(⊗, f(i) for (f, i) in zip(paulis, bases)))
+    pbv = []
+    for paulis in Iterators.product((pauli_funcs for _ in 1:num_qubits)...)
+        basis_vector = sparse(reshape(reduce(⊗, f(SpinBasis(1//2)) for f in paulis).data, 2 ^ (2*num_qubits)))
+        push!(pbv, basis_vector)
     end
+    return reduce((x, y) -> [x y], pbv)
+end
 
-    so_dim = 2 ^ (2 * length(bases))
-    data = Array{Float64}(undef, (so_dim, so_dim))
-
-    for (idx, u) in enumerate(pauli_basis_vectors)
-        for (jdx, v) in enumerate(pauli_basis_vectors)
-            data[idx, jdx] = reshape(u.data, so_dim)' * sop.data * reshape(v.data, so_dim) / √so_dim |> real
-        end
+function PauliTransferMatrix(sop::DenseSuperOperator{B, B, Array{Complex{Float64}, 2}}) where B <: Tuple{PauliBasis, PauliBasis}
+    num_qubits = length(sop.basis_l[1].bases)
+    pbv = pauli_basis_vectors(num_qubits)
+    sop_dim = 2 ^ (2 * num_qubits)
+    data = Array{Float64}(undef, (sop_dim, sop_dim))
+    for (idx, jdx) in Iterators.product(1:sop_dim, 1:sop_dim)
+        data[idx, jdx] = pbv[:, idx]' * sop.data * pbv[:, jdx] / √sop_dim |> real
     end
-
     return DensePauliTransferMatrix(sop.basis_l, sop.basis_r, data)
 end
+
+PauliTransferMatrix(unitary::DenseOperator{B, B, Array{Complex{Float64},2}}) where B <: PauliBasis = PauliTransferMatrix(SuperOperator(unitary))
 
 end # end module
